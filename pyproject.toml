@@ -1,0 +1,57 @@
+[project]
+name = "docrag"
+version = "0.1.0"
+description = "Self-hosted hybrid RAG over PDF documents."
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Stavros Georgousis" }]
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4",
+    "pylint>=4.1",
+    "pytest>=9.2",
+    "ruff>=0.17",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+# Keeps local, CI, and image builds on the same uv minor as the build backend.
+[tool.uv]
+required-version = ">=0.13.8,<0.14.0"
+
+# Formatting, import order, and docstring shape. General linting is pylint's
+# job (see .pylintrc), so no other ruff rule sets are enabled.
+[tool.ruff]
+line-length = 80
+indent-width = 4
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["I", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+force-single-line = true
+force-sort-within-sections = true
+known-first-party = ["docrag"]
+
+[tool.ruff.lint.per-file-ignores]
+# The Google guide does not require docstrings on tests.
+"tests/**" = ["D"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
