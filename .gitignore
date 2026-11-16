@@ -10,6 +10,7 @@ dist/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+__marimo__/
 
 # Dataset files and parser caches are never committed.
 data/

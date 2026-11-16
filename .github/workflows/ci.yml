@@ -34,7 +34,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Lint
-        run: uv run pylint src tests
+        run: uv run pylint src tests scripts
 
       - name: Type check
         run: uv run mypy
