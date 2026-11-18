@@ -9,11 +9,6 @@ requires-python = ">=3.12"
 dependencies = []
 
 [dependency-groups]
-audit = [
-    "marimo>=0.25.2",
-    "pyarrow>=26.0.1",
-    "pypdfium2>=5.15.2",
-]
 dev = [
     "mypy>=2.4",
     "pylint>=4.1",
@@ -28,9 +23,6 @@ build-backend = "uv_build"
 # Keeps local, CI, and image builds on the same uv minor as the build backend.
 [tool.uv]
 required-version = ">=0.13.8,<0.14.0"
-# The audit group is needed to lint, type check, and test scripts/. The
-# service image installs neither group.
-default-groups = ["dev", "audit"]
 
 # Formatting, import order, and docstring shape. General linting is pylint's
 # job (see .pylintrc), so no other ruff rule sets are enabled.
@@ -59,19 +51,8 @@ force-sort-within-sections = true
 strict = true
 python_version = "3.12"
 files = ["src", "tests", "scripts"]
-mypy_path = ["scripts"]
 warn_unreachable = true
-
-# These packages ship no type information.
-[[tool.mypy.overrides]]
-module = ["pyarrow", "pyarrow.*", "pypdfium2", "pypdfium2.*"]
-ignore_missing_imports = true
-
-# Lets notebooks import the modules in scripts/.
-[tool.marimo.runtime]
-pythonpath = ["scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
 addopts = "-ra --strict-markers --strict-config"
