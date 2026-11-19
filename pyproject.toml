@@ -8,12 +8,24 @@ authors = [{ name = "Stavros Georgousis" }]
 requires-python = ">=3.12"
 dependencies = []
 
+[project.optional-dependencies]
+# Needed by docrag.file_ops.download and docrag.datasets: downloading the
+# benchmark.
+datasets = [
+    "requests>=2.34.2",
+    "tqdm>=4.70.1",
+]
+
 [dependency-groups]
 dev = [
+    # The package itself with its extras, so every module can be checked.
+    "docrag[datasets]",
     "mypy>=2.4",
     "pylint>=4.1",
     "pytest>=9.2",
     "ruff>=0.17",
+    "types-requests>=2.33.0",
+    "types-tqdm>=4.70.0",
 ]
 
 [build-system]

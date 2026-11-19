@@ -48,3 +48,16 @@ def reject_non_directory(path: pathlib.Path) -> None:
     """
     if path.exists() and not path.is_dir():
         raise FileExistsError(f"{path}: exists and is not a directory")
+
+
+def reject_non_file(path: pathlib.Path) -> None:
+    """Raises an error if a path exists and is not a regular file.
+
+    Args:
+        path: The path to check. It does not have to exist.
+
+    Raises:
+        FileExistsError: path exists and is not a regular file.
+    """
+    if path.exists() and not path.is_file():
+        raise FileExistsError(f"{path}: exists and is not a regular file")

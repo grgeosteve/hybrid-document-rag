@@ -91,3 +91,24 @@ def test_reject_non_directory_directory(tmp_path: pathlib.Path) -> None:
 
 def test_reject_non_directory_missing_path(tmp_path: pathlib.Path) -> None:
     paths.reject_non_directory(tmp_path / "missing")
+
+
+def test_reject_non_file_directory(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "directory"
+    path.mkdir()
+
+    with pytest.raises(FileExistsError) as excinfo:
+        paths.reject_non_file(path)
+
+    assert str(excinfo.value) == f"{path}: exists and is not a regular file"
+
+
+def test_reject_non_file_regular_file(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "file.txt"
+    path.write_bytes(b"file")
+
+    paths.reject_non_file(path)
+
+
+def test_reject_non_file_missing_path(tmp_path: pathlib.Path) -> None:
+    paths.reject_non_file(tmp_path / "missing")

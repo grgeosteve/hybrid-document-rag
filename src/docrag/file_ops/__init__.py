@@ -1,1 +1,1 @@
-"""File operations: checksums, path checks, and ZIP extraction."""
+"""File operations: checksums, path checks, ZIP extraction, and downloads."""
