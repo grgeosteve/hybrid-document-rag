@@ -32,6 +32,28 @@ def test_is_safe_path_symlink_to_outside(tmp_path: pathlib.Path) -> None:
     assert not paths.is_safe_path(base_dir, link / "file.txt")
 
 
+def test_reject_non_plain_name_plain() -> None:
+    paths.reject_non_plain_name("data.bin")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("", id="empty"),
+        pytest.param(".", id="dot"),
+        pytest.param("..", id="dot-dot"),
+        pytest.param("nested/data.bin", id="nested"),
+        pytest.param("../data.bin", id="parent"),
+        pytest.param("/data.bin", id="absolute"),
+    ],
+)
+def test_reject_non_plain_name_invalid(name: str) -> None:
+    with pytest.raises(ValueError) as excinfo:
+        paths.reject_non_plain_name(name)
+
+    assert str(excinfo.value) == f"{name!r}: not a plain file name"
+
+
 def test_reject_symlink_link_to_file(tmp_path: pathlib.Path) -> None:
     target = tmp_path / "target.txt"
     target.write_bytes(b"target")

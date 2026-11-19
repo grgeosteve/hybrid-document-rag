@@ -99,11 +99,7 @@ class Source:
             ValueError: filename is not a plain file name, for example "",
                 ".." or "a/b".
         """
-        if (
-            self.filename in ("", ".", "..")
-            or pathlib.PurePath(self.filename).name != self.filename
-        ):
-            raise ValueError(f"{self.filename!r}: not a plain file name")
+        paths.reject_non_plain_name(self.filename)
 
 
 def parse_content_length(value: str | None) -> int | None:

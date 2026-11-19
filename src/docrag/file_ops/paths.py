@@ -23,6 +23,20 @@ def is_safe_path(base_dir: pathlib.Path, target_path: pathlib.Path) -> bool:
     return target_path.is_relative_to(base_path)
 
 
+def reject_non_plain_name(name: str) -> None:
+    """Raises an error if a name is not a plain file name.
+
+    Args:
+        name: The name to check.
+
+    Raises:
+        ValueError: name is not a plain file name, for example "", ".." or
+            "a/b".
+    """
+    if name in ("", ".", "..") or pathlib.PurePath(name).name != name:
+        raise ValueError(f"{name!r}: not a plain file name")
+
+
 def reject_symlink(path: pathlib.Path) -> None:
     """Raises an error if a path is a symbolic link.
 
