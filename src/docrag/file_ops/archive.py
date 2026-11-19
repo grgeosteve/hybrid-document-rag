@@ -7,6 +7,7 @@ import tempfile
 import zipfile
 
 from docrag.file_ops import checksum
+from docrag.file_ops import paths
 
 _STAGING_INFIX = ".extract-staging-"
 _MARKER_NAME = ".archive-checksum"
@@ -37,26 +38,6 @@ class UnsafeArchiveError(Exception):
         self.reason = reason
 
         super().__init__(f"{archive_path}: member {member_name!r} {reason}")
-
-
-def is_safe_path(base_dir: pathlib.Path, target_path: pathlib.Path) -> bool:
-    """Reports whether a path resolves to a location inside a directory.
-
-    Both paths are resolved before they are compared, so `..` components
-    and symlinks cannot be used to point outside the directory.
-
-    Args:
-        base_dir: The directory the target must stay within.
-        target_path: The path to test.
-
-    Returns:
-        True if target_path is base_dir itself or lies inside it, False
-        otherwise.
-    """
-    base_path = base_dir.resolve()
-    target_path = target_path.resolve()
-
-    return target_path.is_relative_to(base_path)
 
 
 def secure_zip_extract(
@@ -92,7 +73,7 @@ def secure_zip_extract(
 
             member_target = dest_dir / member.filename
 
-            if not is_safe_path(dest_dir, member_target):
+            if not paths.is_safe_path(dest_dir, member_target):
                 raise UnsafeArchiveError(
                     archive_path,
                     member.filename,
@@ -100,33 +81,6 @@ def secure_zip_extract(
                 )
 
         zip_ref.extractall(dest_dir)
-
-
-def _reject_symlink(path: pathlib.Path) -> None:
-    """Raises an error if a path is a symbolic link.
-
-    Args:
-        path: The path to check. It does not have to exist.
-
-    Raises:
-        OSError: path is a symbolic link, including one whose target does
-            not exist.
-    """
-    if path.is_symlink():
-        raise OSError(f"{path}: symbolic links are not allowed")
-
-
-def _reject_non_directory(path: pathlib.Path) -> None:
-    """Raises an error if a path exists and is not a directory.
-
-    Args:
-        path: The path to check. It does not have to exist.
-
-    Raises:
-        FileExistsError: path exists and is not a directory.
-    """
-    if path.exists() and not path.is_dir():
-        raise FileExistsError(f"{path}: exists and is not a directory")
 
 
 def _read_marker(directory: pathlib.Path) -> str | None:
@@ -142,7 +96,7 @@ def _read_marker(directory: pathlib.Path) -> str | None:
         OSError: The marker is a symbolic link or cannot be read.
     """
     marker_path = directory / _MARKER_NAME
-    _reject_symlink(marker_path)
+    paths.reject_symlink(marker_path)
     if not marker_path.is_file():
         return None
     return marker_path.read_text()
@@ -191,8 +145,8 @@ def _remove_staging_dirs(target_dir: pathlib.Path) -> None:
     prefix = target_dir.name + _STAGING_INFIX
     for path in sorted(target_dir.parent.iterdir()):
         if path.name.startswith(prefix):
-            _reject_symlink(path)
-            _reject_non_directory(path)
+            paths.reject_symlink(path)
+            paths.reject_non_directory(path)
             shutil.rmtree(path)
 
 
@@ -240,8 +194,8 @@ def extract_archive(
     marker_text = (
         f"{archive_checksum.algorithm.value}:{archive_checksum.hexdigest}"
     )
-    _reject_symlink(target_dir)
-    _reject_non_directory(target_dir)
+    paths.reject_symlink(target_dir)
+    paths.reject_non_directory(target_dir)
     _remove_staging_dirs(target_dir)
     replace_target = False
     if target_dir.is_dir():

@@ -98,31 +98,6 @@ def _write_leftover_staging_dir(target_dir: pathlib.Path) -> pathlib.Path:
     return staging_dir
 
 
-def test_is_safe_path_inside_base_dir(tmp_path: pathlib.Path) -> None:
-    assert archive.is_safe_path(tmp_path, tmp_path / "nested" / "file.txt")
-
-
-def test_is_safe_path_base_dir_itself(tmp_path: pathlib.Path) -> None:
-    assert archive.is_safe_path(tmp_path, tmp_path)
-
-
-def test_is_safe_path_outside_base_dir(tmp_path: pathlib.Path) -> None:
-    base_dir = tmp_path / "base"
-
-    assert not archive.is_safe_path(base_dir, base_dir / ".." / "file.txt")
-
-
-def test_is_safe_path_symlink_to_outside(tmp_path: pathlib.Path) -> None:
-    base_dir = tmp_path / "base"
-    base_dir.mkdir()
-    outside_dir = tmp_path / "outside"
-    outside_dir.mkdir()
-    link = base_dir / "link"
-    link.symlink_to(outside_dir, target_is_directory=True)
-
-    assert not archive.is_safe_path(base_dir, link / "file.txt")
-
-
 def test_secure_zip_extract_safe_archive(tmp_path: pathlib.Path) -> None:
     archive_path = tmp_path / "data.zip"
     _write_zip(archive_path, {"a.txt": b"alpha", "nested/b.txt": b"beta"})
