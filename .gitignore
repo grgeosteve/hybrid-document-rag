@@ -12,6 +12,9 @@ dist/
 .ruff_cache/
 __marimo__/
 
+# Coverage data
+.coverage
+
 # Dataset files and parser caches are never committed.
 data/
 
