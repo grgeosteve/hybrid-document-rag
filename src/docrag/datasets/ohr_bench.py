@@ -1,5 +1,6 @@
 """Pinned sources and file locations of the OHR-Bench dataset."""
 
+from docrag.datasets import dataset
 from docrag.file_ops import checksum
 from docrag.file_ops import download
 
@@ -19,7 +20,7 @@ PDFS_DIR = "pdfs"
 GROUND_TRUTH_FILE = "OHR-Bench_v2.parquet"
 QA_FILE = "qas_v2.json"
 
-PDFS_SOURCE = download.Source(
+_PDFS_SOURCE = download.Source(
     url=f"{_HF_BASE_URL}/{PDFS_ARCHIVE}",
     filename=PDFS_ARCHIVE,
     checksum=checksum.Checksum(
@@ -28,23 +29,28 @@ PDFS_SOURCE = download.Source(
     ),
 )
 
-SOURCES = (
-    PDFS_SOURCE,
-    download.Source(
-        url=f"{_HF_BASE_URL}/{GROUND_TRUTH_FILE}",
-        filename=GROUND_TRUTH_FILE,
-        checksum=checksum.Checksum(
-            algorithm=checksum.Algorithm.SHA256,
-            hexdigest="e7a1a8ac1f72c84a2fcdc0faf3af09190654c41a1dd33a8e3cf52393e4b53c82",  # pylint: disable=line-too-long
+DATASET = dataset.Dataset(
+    name="ohr_bench",
+    sources=(
+        _PDFS_SOURCE,
+        download.Source(
+            url=f"{_HF_BASE_URL}/{GROUND_TRUTH_FILE}",
+            filename=GROUND_TRUTH_FILE,
+            checksum=checksum.Checksum(
+                algorithm=checksum.Algorithm.SHA256,
+                hexdigest="e7a1a8ac1f72c84a2fcdc0faf3af09190654c41a1dd33a8e3cf52393e4b53c82",  # pylint: disable=line-too-long
+            ),
+        ),
+        # GitHub publishes a git blob SHA-1 for this file, not a SHA-256.
+        download.Source(
+            url=f"{_GITHUB_BASE_URL}/data/{QA_FILE}",
+            filename=QA_FILE,
+            checksum=checksum.Checksum(
+                algorithm=checksum.Algorithm.GIT_BLOB_SHA1,
+                hexdigest="6fc22e117f6acc5284f298defdec835af35722f9",
+            ),
         ),
     ),
-    # GitHub publishes a git blob SHA-1 for this file, not a SHA-256.
-    download.Source(
-        url=f"{_GITHUB_BASE_URL}/data/{QA_FILE}",
-        filename=QA_FILE,
-        checksum=checksum.Checksum(
-            algorithm=checksum.Algorithm.GIT_BLOB_SHA1,
-            hexdigest="6fc22e117f6acc5284f298defdec835af35722f9",
-        ),
-    ),
+    archive_source=_PDFS_SOURCE,
+    extract_dir_name=PDFS_DIR,
 )

@@ -10,6 +10,7 @@ import zipfile
 import pytest
 import requests
 
+from docrag.datasets import dataset
 from docrag.datasets import pull
 from docrag.file_ops import archive
 from docrag.file_ops import checksum
@@ -88,28 +89,47 @@ def _failing_download(url: str, destination_path: pathlib.Path) -> None:
     raise requests.ConnectionError(url)
 
 
+_NAME = "sample"
 _EXTRACT_DIR = "pdfs"
 _TEXT = b"contents of the text file"
 _ARCHIVE = _zip_bytes({"a.pdf": b"alpha", "nested/b.pdf": b"beta"})
 _TEXT_SOURCE = _source("text.json", _TEXT)
 _ARCHIVE_SOURCE = _source("pdfs.zip", _ARCHIVE)
-_SOURCES = (_TEXT_SOURCE, _ARCHIVE_SOURCE)
 _CONTENTS = {_TEXT_SOURCE.url: _TEXT, _ARCHIVE_SOURCE.url: _ARCHIVE}
 
 
-def test_pull_dataset_empty_data_dir(
+def _dataset(
+    sources: tuple[download.Source, ...] = (_TEXT_SOURCE, _ARCHIVE_SOURCE),
+    archive_source: download.Source = _ARCHIVE_SOURCE,
+) -> dataset.Dataset:
+    """Returns the test dataset.
+
+    Args:
+        sources: The files of the dataset.
+        archive_source: The archive among sources that the dataset
+            extracts.
+    """
+    return dataset.Dataset(
+        name=_NAME,
+        sources=sources,
+        archive_source=archive_source,
+        extract_dir_name=_EXTRACT_DIR,
+    )
+
+
+def test_pull_dataset_new_data_root(
     tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.INFO, logger=pull.__name__)
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
     extract_dir = data_dir / _EXTRACT_DIR
     downloader = _FakeDownloader(_CONTENTS)
 
-    pull.pull_dataset(
-        data_dir, _SOURCES, _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-    )
+    pull.pull_dataset(data_root, _dataset(), downloader)
 
     assert downloader.urls == [_TEXT_SOURCE.url, _ARCHIVE_SOURCE.url]
+    assert list(data_root.iterdir()) == [data_dir]
     assert (data_dir / "text.json").read_bytes() == _TEXT
     assert (data_dir / "pdfs.zip").read_bytes() == _ARCHIVE
     assert (extract_dir / "a.pdf").read_bytes() == b"alpha"
@@ -129,23 +149,15 @@ def test_pull_dataset_empty_data_dir(
 def test_pull_dataset_second_run(
     tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    data_dir = tmp_path / "data"
-    extract_dir = data_dir / _EXTRACT_DIR
-    pull.pull_dataset(
-        data_dir,
-        _SOURCES,
-        _ARCHIVE_SOURCE,
-        _EXTRACT_DIR,
-        _FakeDownloader(_CONTENTS),
-    )
+    data_root = tmp_path / "data"
+    extract_dir = data_root / _NAME / _EXTRACT_DIR
+    pull.pull_dataset(data_root, _dataset(), _FakeDownloader(_CONTENTS))
     added = extract_dir / "added.pdf"
     added.write_bytes(b"added")
     caplog.set_level(logging.INFO, logger=pull.__name__)
     downloader = _FakeDownloader(_CONTENTS)
 
-    pull.pull_dataset(
-        data_dir, _SOURCES, _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-    )
+    pull.pull_dataset(data_root, _dataset(), downloader)
 
     assert not downloader.urls
     assert added.read_bytes() == b"added"
@@ -159,16 +171,10 @@ def test_pull_dataset_second_run(
 def test_pull_dataset_changed_archive_no_overwrite(
     tmp_path: pathlib.Path,
 ) -> None:
-    data_dir = tmp_path / "data"
-    archive_path = data_dir / "pdfs.zip"
-    extract_dir = data_dir / _EXTRACT_DIR
-    pull.pull_dataset(
-        data_dir,
-        _SOURCES,
-        _ARCHIVE_SOURCE,
-        _EXTRACT_DIR,
-        _FakeDownloader(_CONTENTS),
-    )
+    data_root = tmp_path / "data"
+    archive_path = data_root / _NAME / "pdfs.zip"
+    extract_dir = data_root / _NAME / _EXTRACT_DIR
+    pull.pull_dataset(data_root, _dataset(), _FakeDownloader(_CONTENTS))
     new_archive = _zip_bytes({"c.pdf": b"gamma"})
     new_archive_source = _source("pdfs.zip", new_archive)
     downloader = _FakeDownloader(
@@ -177,10 +183,8 @@ def test_pull_dataset_changed_archive_no_overwrite(
 
     with pytest.raises(FileExistsError) as excinfo:
         pull.pull_dataset(
-            data_dir,
-            (_TEXT_SOURCE, new_archive_source),
-            new_archive_source,
-            _EXTRACT_DIR,
+            data_root,
+            _dataset((_TEXT_SOURCE, new_archive_source), new_archive_source),
             downloader,
         )
 
@@ -197,15 +201,10 @@ def test_pull_dataset_changed_archive_no_overwrite(
 def test_pull_dataset_changed_archive_overwrite(
     tmp_path: pathlib.Path,
 ) -> None:
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
     extract_dir = data_dir / _EXTRACT_DIR
-    pull.pull_dataset(
-        data_dir,
-        _SOURCES,
-        _ARCHIVE_SOURCE,
-        _EXTRACT_DIR,
-        _FakeDownloader(_CONTENTS),
-    )
+    pull.pull_dataset(data_root, _dataset(), _FakeDownloader(_CONTENTS))
     new_archive = _zip_bytes({"c.pdf": b"gamma"})
     new_archive_source = _source("pdfs.zip", new_archive)
     downloader = _FakeDownloader(
@@ -213,10 +212,8 @@ def test_pull_dataset_changed_archive_overwrite(
     )
 
     pull.pull_dataset(
-        data_dir,
-        (_TEXT_SOURCE, new_archive_source),
-        new_archive_source,
-        _EXTRACT_DIR,
+        data_root,
+        _dataset((_TEXT_SOURCE, new_archive_source), new_archive_source),
         downloader,
         overwrite=True,
     )
@@ -228,78 +225,17 @@ def test_pull_dataset_changed_archive_overwrite(
     assert not (extract_dir / "nested").exists()
 
 
-def test_pull_dataset_archive_not_in_sources(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
-    downloader = _FakeDownloader(_CONTENTS)
-
-    with pytest.raises(ValueError) as excinfo:
-        pull.pull_dataset(
-            data_dir, (_TEXT_SOURCE,), _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-        )
-
-    assert str(excinfo.value) == (
-        "'pdfs.zip': archive source is not in sources"
-    )
-    assert not downloader.urls
-    assert not data_dir.exists()
-
-
-@pytest.mark.parametrize(
-    "extract_dir_name",
-    [
-        pytest.param("", id="empty"),
-        pytest.param(".", id="dot"),
-        pytest.param("..", id="dot-dot"),
-        pytest.param("nested/pdfs", id="nested"),
-        pytest.param("../pdfs", id="parent"),
-        pytest.param("/pdfs", id="absolute"),
-    ],
-)
-def test_pull_dataset_invalid_extract_dir_name(
-    tmp_path: pathlib.Path, extract_dir_name: str
-) -> None:
-    data_dir = tmp_path / "data"
-    downloader = _FakeDownloader(_CONTENTS)
-
-    with pytest.raises(ValueError) as excinfo:
-        pull.pull_dataset(
-            data_dir, _SOURCES, _ARCHIVE_SOURCE, extract_dir_name, downloader
-        )
-
-    assert str(excinfo.value) == (
-        f"{extract_dir_name!r}: not a plain file name"
-    )
-    assert not downloader.urls
-    assert not data_dir.exists()
-
-
-def test_pull_dataset_extract_dir_name_is_source_filename(
-    tmp_path: pathlib.Path,
-) -> None:
-    data_dir = tmp_path / "data"
-    downloader = _FakeDownloader(_CONTENTS)
-
-    with pytest.raises(ValueError) as excinfo:
-        pull.pull_dataset(
-            data_dir, _SOURCES, _ARCHIVE_SOURCE, "text.json", downloader
-        )
-
-    assert str(excinfo.value) == "'text.json': also names a source file"
-    assert not downloader.urls
-    assert not data_dir.exists()
-
-
 def test_pull_dataset_data_dir_is_symlink(tmp_path: pathlib.Path) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
     real_dir = tmp_path / "real"
     real_dir.mkdir()
-    data_dir = tmp_path / "data"
+    data_dir = data_root / _NAME
     data_dir.symlink_to(real_dir, target_is_directory=True)
     downloader = _FakeDownloader(_CONTENTS)
 
     with pytest.raises(OSError) as excinfo:
-        pull.pull_dataset(
-            data_dir, _SOURCES, _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-        )
+        pull.pull_dataset(data_root, _dataset(), downloader)
 
     assert str(excinfo.value) == f"{data_dir}: symbolic links are not allowed"
     assert not downloader.urls
@@ -307,16 +243,30 @@ def test_pull_dataset_data_dir_is_symlink(tmp_path: pathlib.Path) -> None:
     assert not list(real_dir.iterdir())
 
 
+def test_pull_dataset_data_dir_is_file(tmp_path: pathlib.Path) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    data_dir = data_root / _NAME
+    data_dir.write_bytes(b"not a directory")
+    downloader = _FakeDownloader(_CONTENTS)
+
+    with pytest.raises(FileExistsError) as excinfo:
+        pull.pull_dataset(data_root, _dataset(), downloader)
+
+    assert str(excinfo.value) == f"{data_dir}: exists and is not a directory"
+    assert not downloader.urls
+    assert data_dir.read_bytes() == b"not a directory"
+
+
 def test_pull_dataset_checksum_mismatch(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
     downloader = _FakeDownloader(
         {_TEXT_SOURCE.url: _TEXT, _ARCHIVE_SOURCE.url: b"corrupted"}
     )
 
     with pytest.raises(download.ChecksumMismatchError) as excinfo:
-        pull.pull_dataset(
-            data_dir, _SOURCES, _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-        )
+        pull.pull_dataset(data_root, _dataset(), downloader)
 
     assert excinfo.value.path == data_dir / "pdfs.zip"
     assert not (data_dir / "pdfs.zip").exists()
@@ -324,30 +274,26 @@ def test_pull_dataset_checksum_mismatch(tmp_path: pathlib.Path) -> None:
 
 
 def test_pull_dataset_download_error(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
 
     with pytest.raises(requests.ConnectionError):
-        pull.pull_dataset(
-            data_dir,
-            _SOURCES,
-            _ARCHIVE_SOURCE,
-            _EXTRACT_DIR,
-            _failing_download,
-        )
+        pull.pull_dataset(data_root, _dataset(), _failing_download)
 
     assert not (data_dir / "text.json").exists()
     assert not (data_dir / _EXTRACT_DIR).exists()
 
 
 def test_pull_dataset_unsafe_archive(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
     unsafe_archive = _zip_bytes({"../evil.pdf": b"evil"})
     unsafe_source = _source("pdfs.zip", unsafe_archive)
     downloader = _FakeDownloader({unsafe_source.url: unsafe_archive})
 
     with pytest.raises(archive.UnsafeArchiveError):
         pull.pull_dataset(
-            data_dir, (unsafe_source,), unsafe_source, _EXTRACT_DIR, downloader
+            data_root, _dataset((unsafe_source,), unsafe_source), downloader
         )
 
     assert not (data_dir / _EXTRACT_DIR).exists()
@@ -355,33 +301,17 @@ def test_pull_dataset_unsafe_archive(tmp_path: pathlib.Path) -> None:
 
 
 def test_pull_dataset_not_a_zip(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
+    data_root = tmp_path / "data"
+    data_dir = data_root / _NAME
     not_a_zip = b"not a ZIP archive"
     not_a_zip_source = _source("pdfs.zip", not_a_zip)
     downloader = _FakeDownloader({not_a_zip_source.url: not_a_zip})
 
     with pytest.raises(zipfile.BadZipFile):
         pull.pull_dataset(
-            data_dir,
-            (not_a_zip_source,),
-            not_a_zip_source,
-            _EXTRACT_DIR,
+            data_root,
+            _dataset((not_a_zip_source,), not_a_zip_source),
             downloader,
         )
 
     assert not (data_dir / _EXTRACT_DIR).exists()
-
-
-def test_pull_dataset_data_dir_is_file(tmp_path: pathlib.Path) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.write_bytes(b"not a directory")
-    downloader = _FakeDownloader(_CONTENTS)
-
-    with pytest.raises(FileExistsError) as excinfo:
-        pull.pull_dataset(
-            data_dir, _SOURCES, _ARCHIVE_SOURCE, _EXTRACT_DIR, downloader
-        )
-
-    assert str(excinfo.value) == f"{data_dir}: exists and is not a directory"
-    assert not downloader.urls
-    assert data_dir.read_bytes() == b"not a directory"
