@@ -60,7 +60,7 @@ class _FakeDownloader:
     """
 
     def __init__(self, content: bytes) -> None:
-        """Initializes the downloader.
+        """Initialises the downloader.
 
         Args:
             content: The bytes written on each call.

@@ -24,7 +24,7 @@ class UnreadablePdfError(Exception):
     """
 
     def __init__(self, path: pathlib.Path) -> None:
-        """Initializes the error with the file.
+        """Initialises the error with the file.
 
         Args:
             path: The file that could not be read.

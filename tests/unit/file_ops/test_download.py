@@ -81,7 +81,7 @@ class _FakeTokens:
     def __init__(
         self, data_dir: pathlib.Path, tokens: Sequence[str], taken: str
     ) -> None:
-        """Initializes the tokens.
+        """Initialises the tokens.
 
         Args:
             data_dir: The data directory the partial files are in.
@@ -118,7 +118,7 @@ class _FakeDownloader:
     """
 
     def __init__(self, content: bytes) -> None:
-        """Initializes the downloader.
+        """Initialises the downloader.
 
         Args:
             content: The bytes written on each call.
@@ -145,7 +145,7 @@ class _FailingDownloader:
     """
 
     def __init__(self) -> None:
-        """Initializes the downloader."""
+        """Initialises the downloader."""
         self.calls: list[tuple[str, pathlib.Path]] = []
 
     def __call__(self, url: str, destination_path: pathlib.Path) -> None:
@@ -175,7 +175,7 @@ class _FakeRaw:
         chunks: Sequence[bytes],
         error: requests.RequestException | None = None,
     ) -> None:
-        """Initializes the stream.
+        """Initialises the stream.
 
         Args:
             chunks: The pieces of the body, in the order they are served.
@@ -242,7 +242,7 @@ class _FakeGet:
     """
 
     def __init__(self, response: requests.Response) -> None:
-        """Initializes the fake.
+        """Initialises the fake.
 
         Args:
             response: The response every call returns.

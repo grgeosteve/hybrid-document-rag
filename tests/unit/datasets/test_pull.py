@@ -56,7 +56,7 @@ class _FakeDownloader:
     """
 
     def __init__(self, contents: Mapping[str, bytes]) -> None:
-        """Initializes the downloader.
+        """Initialises the downloader.
 
         Args:
             contents: Each URL mapped to the bytes written for it.

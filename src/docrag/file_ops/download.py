@@ -35,7 +35,7 @@ class ChecksumMismatchError(Exception):
     def __init__(
         self, path: pathlib.Path, expected: checksum.Checksum, actual: str
     ) -> None:
-        """Initializes the error with the file and both checksums.
+        """Initialises the error with the file and both checksums.
 
         Args:
             path: The final path of the file that was checked.
@@ -65,7 +65,7 @@ class UnsafeDestinationError(Exception):
     def __init__(
         self, destination_path: pathlib.Path, data_dir: pathlib.Path
     ) -> None:
-        """Initializes the error with the destination and the directory.
+        """Initialises the error with the destination and the directory.
 
         Args:
             destination_path: The path the file would be written to.

@@ -25,7 +25,7 @@ class UnsafeArchiveError(Exception):
     def __init__(
         self, archive_path: pathlib.Path, member_name: str, reason: str
     ) -> None:
-        """Initializes the error with the archive and the offending member.
+        """Initialises the error with the archive and the offending member.
 
         Args:
             archive_path: The archive that holds the member.

@@ -25,7 +25,7 @@ class _FailingReader:
     """Wraps an open file and fails with an I/O error on the second read."""
 
     def __init__(self, file: io.BufferedReader) -> None:
-        """Initializes the reader.
+        """Initialises the reader.
 
         Args:
             file: The open file to read from.
