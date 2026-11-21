@@ -359,13 +359,15 @@ wheels = [
 name = "docrag"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "pypdfium2" },
+]
 
 [package.optional-dependencies]
 datasets = [
     { name = "lingua-language-detector" },
     { name = "pandas" },
     { name = "pyarrow" },
-    { name = "pypdfium2" },
     { name = "requests" },
     { name = "tqdm" },
 ]
@@ -394,7 +396,7 @@ requires-dist = [
     { name = "lingua-language-detector", marker = "extra == 'datasets'", specifier = ">=2.2.0" },
     { name = "pandas", marker = "extra == 'datasets'", specifier = ">=3.1.1" },
     { name = "pyarrow", marker = "extra == 'datasets'", specifier = ">=26.0.1" },
-    { name = "pypdfium2", marker = "extra == 'datasets'", specifier = ">=5.15.2" },
+    { name = "pypdfium2", specifier = ">=5.15.2" },
     { name = "rapidfuzz", marker = "extra == 'evaluation'", specifier = ">=3.14.6" },
     { name = "requests", marker = "extra == 'datasets'", specifier = ">=2.34.2" },
     { name = "tqdm", marker = "extra == 'datasets'", specifier = ">=4.70.1" },
