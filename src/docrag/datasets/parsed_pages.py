@@ -1,4 +1,4 @@
-"""Parsed pages of benchmark PDFs, and their parquet files."""
+"""Batch parsing of benchmark PDFs, its parquet files, and reference pairs."""
 
 from collections.abc import Sequence
 import os
@@ -12,6 +12,10 @@ from docrag.file_ops import paths
 from docrag.ingestion import protocol
 
 _COLUMNS = ("doc_name", "page_idx", "text", "error")
+_KEY_COLUMNS = ("doc_name", "page_idx")
+_REFERENCE_COLUMNS = ("doc_name", "page_idx", "text")
+_RESERVED_COLUMNS = ("reference", "candidate", "error")
+_MISMATCH_NAMES_SHOWN = 5
 
 
 def parse_documents(
@@ -137,3 +141,72 @@ def load_parsed_pages(path: pathlib.Path) -> pd.DataFrame:
         raise ValueError(f"{path}: missing columns {missing}")
 
     return parsed_pages
+
+
+def pair_with_reference(
+    parsed: pd.DataFrame, reference: pd.DataFrame
+) -> pd.DataFrame:
+    """Pairs each parsed page with the reference text of the same page.
+
+    parsed and reference are not changed.
+
+    Args:
+        parsed: One row per parsed page, with the columns doc_name,
+            page_idx, text, and error. Other columns are ignored.
+        reference: One row per reference page, with the columns doc_name,
+            page_idx, and text, and any other columns.
+
+    Returns:
+        One row per parsed page, in the order of parsed, with an index
+        from 0. The columns are those of reference in their order, with
+        text renamed to reference, followed by candidate, the parsed text,
+        and error. Documents in reference that are not in parsed are left
+        out. No parsed pages give an empty frame with these columns.
+
+    Raises:
+        ValueError: A required column is missing, reference has a column
+            named reference, candidate, or error, either frame has the
+            same page twice, or the pages of a parsed document differ from
+            its pages in reference.
+    """
+    missing = [column for column in _COLUMNS if column not in parsed]
+    if missing:
+        raise ValueError(f"parsed is missing columns {missing}")
+    missing = [
+        column for column in _REFERENCE_COLUMNS if column not in reference
+    ]
+    if missing:
+        raise ValueError(f"reference is missing columns {missing}")
+    reserved = [column for column in _RESERVED_COLUMNS if column in reference]
+    if reserved:
+        raise ValueError(f"reference has reserved columns {reserved}")
+
+    key_columns = list(_KEY_COLUMNS)
+    if parsed.duplicated(key_columns).any():
+        raise ValueError("parsed has duplicate pages")
+    if reference.duplicated(key_columns).any():
+        raise ValueError("reference has duplicate pages")
+
+    candidates = parsed[[*_KEY_COLUMNS, "text", "error"]].rename(
+        columns={"text": "candidate"}
+    )
+    references = reference[
+        reference["doc_name"].isin(candidates["doc_name"])
+    ].rename(columns={"text": "reference"})
+
+    # Fail on any document whose pages differ between parsed and reference.
+    differing = pd.MultiIndex.from_frame(
+        candidates[key_columns]
+    ).symmetric_difference(pd.MultiIndex.from_frame(references[key_columns]))
+    names = sorted(differing.get_level_values("doc_name").unique())
+    if names:
+        unit = "document" if len(names) == 1 else "documents"
+        raise ValueError(
+            f"page mismatch in {len(names)} {unit}, including "
+            f"{names[:_MISMATCH_NAMES_SHOWN]}"
+        )
+
+    pairs = candidates.reset_index(drop=True).merge(
+        references.reset_index(drop=True), on=key_columns, how="inner"
+    )
+    return pairs[[*references.columns, "candidate", "error"]]

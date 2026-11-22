@@ -49,6 +49,16 @@ def _sample_pages() -> pd.DataFrame:
     )
 
 
+def _parsed(rows: Sequence[tuple[str, int, str, str | None]]) -> pd.DataFrame:
+    """Returns parsed pages from (doc_name, page_idx, text, error) rows."""
+    return pd.DataFrame(list(rows), columns=_COLUMNS)
+
+
+def _reference(rows: Sequence[tuple[str, int, str]]) -> pd.DataFrame:
+    """Returns reference pages from (doc_name, page_idx, text) rows."""
+    return pd.DataFrame(list(rows), columns=["doc_name", "page_idx", "text"])
+
+
 def _directory_contents(directory: pathlib.Path) -> dict[str, bytes]:
     """Returns the name and content of each file in a directory."""
     return {path.name: path.read_bytes() for path in directory.iterdir()}
@@ -351,3 +361,203 @@ def test_load_parsed_pages_missing_column(
         parsed_pages.load_parsed_pages(path)
 
     assert str(excinfo.value) == f"{path}: missing columns ['{column}']"
+
+
+@pytest.mark.parametrize(
+    "index_name",
+    [None, "doc_name", "page_idx"],
+    ids=["unnamed", "document-name", "page-index"],
+)
+def test_pair_with_reference_rows(index_name: str | None) -> None:
+    parsed = _parsed(
+        [
+            ("a", 0, "one", None),
+            ("a", 1, "", _PAGE_LOAD_ERROR),
+            ("b", 0, "two", None),
+        ]
+    )
+    reference = _reference(
+        [("b", 0, "TWO"), ("a", 1, "one more"), ("a", 0, "ONE")]
+    )
+
+    pairs = parsed_pages.pair_with_reference(
+        parsed.rename_axis(index_name), reference.rename_axis(index_name)
+    )
+
+    expected = pd.DataFrame(
+        [
+            ("a", 0, "ONE", "one", None),
+            ("a", 1, "one more", "", _PAGE_LOAD_ERROR),
+            ("b", 0, "TWO", "two", None),
+        ],
+        columns=["doc_name", "page_idx", "reference", "candidate", "error"],
+    )
+    pd.testing.assert_frame_equal(pairs, expected)
+
+
+@pytest.mark.parametrize(
+    "metadata, columns",
+    [
+        pytest.param(
+            {},
+            ["doc_name", "page_idx", "reference", "candidate", "error"],
+            id="no-metadata",
+        ),
+        pytest.param(
+            {"source": "x", "group": "y"},
+            [
+                "doc_name",
+                "page_idx",
+                "reference",
+                "source",
+                "group",
+                "candidate",
+                "error",
+            ],
+            id="two-metadata-columns",
+        ),
+    ],
+)
+def test_pair_with_reference_metadata_columns(
+    metadata: dict[str, str], columns: list[str]
+) -> None:
+    parsed = _parsed([("a", 0, "one", None)])
+    reference = _reference([("a", 0, "ONE")]).assign(**metadata)
+
+    pairs = parsed_pages.pair_with_reference(parsed, reference)
+
+    assert list(pairs.columns) == columns
+    for name, value in metadata.items():
+        assert pairs[name].to_list() == [value]
+
+
+def test_pair_with_reference_unparsed_documents() -> None:
+    parsed = _parsed([("a", 0, "one", None)])
+    reference = _reference([("a", 0, "ONE"), ("b", 0, "TWO")])
+
+    pairs = parsed_pages.pair_with_reference(parsed, reference)
+
+    assert pairs["doc_name"].to_list() == ["a"]
+
+
+def test_pair_with_reference_no_parsed_pages() -> None:
+    parsed = _parsed([])
+    reference = _reference([("a", 0, "ONE")])
+
+    pairs = parsed_pages.pair_with_reference(parsed, reference)
+
+    assert pairs.empty
+    assert list(pairs.columns) == [
+        "doc_name",
+        "page_idx",
+        "reference",
+        "candidate",
+        "error",
+    ]
+
+
+@pytest.mark.parametrize(
+    "parsed_rows, reference_rows",
+    [
+        pytest.param(
+            [("a", 0, "one", None)],
+            [("a", 0, "ONE"), ("a", 1, "TWO")],
+            id="reference-extra-page",
+        ),
+        pytest.param(
+            [("a", 0, "one", None), ("a", 1, "two", None)],
+            [("a", 0, "ONE")],
+            id="parsed-extra-page",
+        ),
+        pytest.param(
+            [("b", 0, "one", None), ("a", 0, "two", None)],
+            [("b", 0, "ONE"), ("c", 0, "TWO")],
+            id="document-not-in-reference",
+        ),
+    ],
+)
+def test_pair_with_reference_page_mismatch(
+    parsed_rows: list[tuple[str, int, str, str | None]],
+    reference_rows: list[tuple[str, int, str]],
+) -> None:
+    with pytest.raises(ValueError) as excinfo:
+        parsed_pages.pair_with_reference(
+            _parsed(parsed_rows), _reference(reference_rows)
+        )
+
+    assert str(excinfo.value) == "page mismatch in 1 document, including ['a']"
+
+
+def test_pair_with_reference_mismatch_names() -> None:
+    parsed = _parsed([(name, 0, "one", None) for name in "fedcba"])
+    reference = _reference([("z", 0, "ONE")])
+
+    with pytest.raises(ValueError) as excinfo:
+        parsed_pages.pair_with_reference(parsed, reference)
+
+    assert str(excinfo.value) == (
+        "page mismatch in 6 documents, including ['a', 'b', 'c', 'd', 'e']"
+    )
+
+
+@pytest.mark.parametrize(
+    "frame, column",
+    [
+        *(
+            pytest.param("parsed", column, id=f"parsed-{column}")
+            for column in _COLUMNS
+        ),
+        *(
+            pytest.param("reference", column, id=f"reference-{column}")
+            for column in ["doc_name", "page_idx", "text"]
+        ),
+    ],
+)
+def test_pair_with_reference_missing_column(frame: str, column: str) -> None:
+    frames = {
+        "parsed": _parsed([("a", 0, "one", None)]),
+        "reference": _reference([("a", 0, "ONE")]),
+    }
+    frames[frame] = frames[frame].drop(columns=[column])
+
+    with pytest.raises(ValueError) as excinfo:
+        parsed_pages.pair_with_reference(frames["parsed"], frames["reference"])
+
+    assert str(excinfo.value) == f"{frame} is missing columns ['{column}']"
+
+
+@pytest.mark.parametrize("column", ["reference", "candidate", "error"])
+def test_pair_with_reference_reserved_column(column: str) -> None:
+    parsed = _parsed([("a", 0, "one", None)])
+    reference = _reference([("a", 0, "ONE")]).assign(**{column: "x"})
+
+    with pytest.raises(ValueError) as excinfo:
+        parsed_pages.pair_with_reference(parsed, reference)
+
+    assert str(excinfo.value) == f"reference has reserved columns ['{column}']"
+
+
+@pytest.mark.parametrize("frame", ["parsed", "reference"])
+def test_pair_with_reference_duplicate_pages(frame: str) -> None:
+    frames = {
+        "parsed": _parsed([("a", 0, "one", None)]),
+        "reference": _reference([("a", 0, "ONE")]),
+    }
+    frames[frame] = pd.concat([frames[frame], frames[frame]])
+
+    with pytest.raises(ValueError) as excinfo:
+        parsed_pages.pair_with_reference(frames["parsed"], frames["reference"])
+
+    assert str(excinfo.value) == f"{frame} has duplicate pages"
+
+
+def test_pair_with_reference_inputs_unchanged() -> None:
+    parsed = _parsed([("a", 0, "one", None)])
+    reference = _reference([("a", 0, "ONE"), ("b", 0, "TWO")])
+
+    parsed_pages.pair_with_reference(parsed, reference)
+
+    pd.testing.assert_frame_equal(parsed, _parsed([("a", 0, "one", None)]))
+    pd.testing.assert_frame_equal(
+        reference, _reference([("a", 0, "ONE"), ("b", 0, "TWO")])
+    )
