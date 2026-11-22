@@ -25,6 +25,7 @@ _QA_COLUMNS = [
 _AUDIT_QA_COLUMNS = [
     "domain" if column == "doc_type" else column for column in _QA_COLUMNS
 ]
+_DETECTION_COLUMNS = ["domain", "language", "confidence"]
 _LANGUAGE_COLUMNS = [
     "texts",
     "confidence_median",
@@ -390,6 +391,72 @@ def test_empty_pages_per_domain() -> None:
     assert list(result.columns) == ["pages", "empty"]
     assert _row(result, "law") == [3, 1]
     assert _row(result, "news") == [2, 0]
+
+
+def test_page_detections_values() -> None:
+    result = _audit().page_detections()
+
+    assert list(result.columns) == _DETECTION_COLUMNS
+    assert list(result.index) == [0, 2, 3, 4]
+    assert _row(result, 0) == ["law", "ENGLISH", pytest.approx(0.9)]
+    assert _row(result, 2) == ["law", "FRENCH", pytest.approx(0.8)]
+    assert _row(result, 3) == ["news", "ENGLISH", pytest.approx(0.5)]
+    assert _row(result, 4) == ["news", "ENGLISH", pytest.approx(0.7)]
+
+
+def test_page_detections_skips_empty_pages() -> None:
+    result = _audit().page_detections()
+
+    assert 1 not in result.index
+    assert "UNKNOWN" not in result["language"].tolist()
+    assert len(result) == 4
+
+
+def test_page_detections_returns_copy() -> None:
+    audit = _audit()
+    first = audit.page_detections()
+    first.loc[0, "language"] = "GERMAN"
+    first.loc[0, "confidence"] = 0.1
+
+    second = audit.page_detections()
+
+    assert _row(second, 0) == ["law", "ENGLISH", pytest.approx(0.9)]
+    assert ("law", "ENGLISH") in audit.page_languages().index
+
+
+def test_question_detections_values() -> None:
+    result = _audit().question_detections()
+
+    assert list(result.columns) == _DETECTION_COLUMNS
+    assert list(result.index) == [0, 1, 2]
+    assert _row(result, 0) == ["law", "ENGLISH", pytest.approx(0.95)]
+    assert _row(result, 1) == ["law", "FRENCH", pytest.approx(0.6)]
+    assert _row(result, 2) == ["news", "ENGLISH", pytest.approx(0.4)]
+
+
+def test_question_detections_returns_copy() -> None:
+    audit = _audit()
+    first = audit.question_detections()
+    first.loc[0, "language"] = "GERMAN"
+    first.loc[0, "confidence"] = 0.1
+
+    second = audit.question_detections()
+
+    assert _row(second, 0) == ["law", "ENGLISH", pytest.approx(0.95)]
+    assert ("law", "ENGLISH") in audit.question_languages().index
+
+
+def test_page_and_question_detections_use_cache() -> None:
+    detect = _FakeDetect()
+    audit = _audit(detect)
+
+    for _ in range(2):
+        audit.page_detections()
+        audit.question_detections()
+        audit.page_languages()
+        audit.question_languages()
+
+    assert detect.calls == 2
 
 
 def test_page_languages_grouped() -> None:

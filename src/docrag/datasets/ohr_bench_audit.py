@@ -269,6 +269,31 @@ class OHRBenchAudit:
 
         return page_stats
 
+    def page_detections(self) -> pd.DataFrame:
+        """Returns the detected language and confidence of non-empty pages.
+
+        A page is empty if its ground-truth text is blank after stripping
+        whitespace.
+
+        Returns:
+            A frame indexed by the page row index, with the columns domain,
+            language, and confidence. Mutating the returned frame does not
+            affect later calls.
+        """
+        return self._page_detections[
+            ~self.pages["gt_text"].map(_is_blank)
+        ].copy()
+
+    def question_detections(self) -> pd.DataFrame:
+        """Returns the detected language and confidence of each question.
+
+        Returns:
+            A frame indexed by the question row index, with the columns domain,
+            language, and confidence. Mutating the returned frame does not
+            affect later calls.
+        """
+        return self._question_detections.copy()
+
     def page_languages(self) -> pd.DataFrame:
         """Summarises the detected languages of non-empty pages.
 
