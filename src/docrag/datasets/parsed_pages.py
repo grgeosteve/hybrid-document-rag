@@ -11,6 +11,8 @@ import tqdm
 from docrag.file_ops import paths
 from docrag.ingestion import protocol
 
+PARSED_PAGES_DIR = "parsed_pages"
+
 _COLUMNS = ("doc_name", "page_idx", "text", "error")
 _KEY_COLUMNS = ("doc_name", "page_idx")
 _REFERENCE_COLUMNS = ("doc_name", "page_idx", "text")
